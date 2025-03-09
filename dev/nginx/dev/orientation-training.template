@@ -1,0 +1,53 @@
+map $sent_http_content_type $expires {
+    "text/html"                 epoch;
+    "text/html; charset=utf-8"  epoch;
+    default                     off;
+}
+
+upstream nodejs_app {
+    server nodejs:3000;
+}
+
+upstream golang_app {
+    server golang:8080;
+}
+
+server {
+    listen 80;
+    server_name orientation-training.local;
+
+    gzip_types text/plain text/css application/json application/x-javascript
+               text/xml application/xml application/xml+rss text/javascript;
+
+    location / {
+        expires $expires;
+        proxy_redirect off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 1m;
+        proxy_connect_timeout 1m;
+        proxy_pass http://nodejs_app;
+    }
+
+    location /be/ {
+        add_header 'Access-Control-Allow-Origin' "$http_origin" always;
+        add_header 'Access-Control-Allow-Methods' 'OPTIONS, GET, POST, DELETE, PUT';
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+
+        proxy_redirect off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 1m;
+        proxy_connect_timeout 1m;
+        proxy_pass http://golang_app;
+        rewrite ^/be/(.*) /$1 break;
+    }
+}
